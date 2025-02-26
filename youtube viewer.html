@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Live Stream Viewer</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f9f9f9;
+      color: #333;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #cc0000;
+    }
+    .input-section {
+      display: flex;
+      margin-bottom: 20px;
+      gap: 10px;
+    }
+    input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #cc0000;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #990000;
+    }
+    .video-container {
+      position: relative;
+      padding-bottom: 56.25%; /* 16:9 aspect ratio */
+      height: 0;
+      overflow: hidden;
+      margin-bottom: 20px;
+      background-color: #000;
+      border-radius: 8px;
+    }
+    .video-container iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .help-text {
+      background-color: #f0f0f0;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .error {
+      color: #cc0000;
+      font-weight: bold;
+      margin-bottom: 10px;
+      display: none;
+    }
+    .history {
+      margin-top: 30px;
+    }
+    .history h3 {
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+    }
+    .history-item {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+    .history-item:hover {
+      background-color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>YouTube Live Stream Viewer</h1>
+      <p>Enter a YouTube video ID or full URL to watch the stream</p>
+    </header>
+    
+    <div class="help-text">
+      <p><strong>How to use:</strong> Enter a YouTube video ID (e.g., "dQw4w9WgXcQ") or the full YouTube URL and click "Load Stream".</p>
+      <p><strong>Tip:</strong> For live streams, make sure to use a video that's currently broadcasting live on YouTube.</p>
+    </div>
+    
+    <div class="error" id="error-message">Invalid YouTube URL or video ID.</div>
+    
+    <div class="input-section">
+      <input type="text" id="video-url" placeholder="Enter YouTube video ID or URL (e.g., dQw4w9WgXcQ or https://www.youtube.com/watch?v=dQw4w9WgXcQ)" />
+      <button id="load-btn">Load Stream</button>
+    </div>
+    
+    <div class="video-container" id="player-container">
+      <!-- YouTube iframe will be inserted here -->
+      <iframe id="youtube-player" src="about:blank" allowfullscreen></iframe>
+    </div>
+    
+    <div class="history">
+      <h3>Recently Watched</h3>
+      <div id="history-list"></div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const videoUrlInput = document.getElementById('video-url');
+      const loadBtn = document.getElementById('load-btn');
+      const playerContainer = document.getElementById('player-container');
+      const player = document.getElementById('youtube-player');
+      const errorMessage = document.getElementById('error-message');
+      const historyList = document.getElementById('history-list');
+      
+      // Load history from localStorage
+      let watchHistory = JSON.parse(localStorage.getItem('youtubeWatchHistory')) || [];
+      
+      // Render initial history
+      renderHistory();
+      
+      loadBtn.addEventListener('click', function() {
+        loadVideo();
+      });
+      
+      videoUrlInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          loadVideo();
+        }
+      });
+      
+      function loadVideo() {
+        const input = videoUrlInput.value.trim();
+        if (!input) {
+          showError();
+          return;
+        }
+        
+        const videoId = extractVideoId(input);
+        if (!videoId) {
+          showError();
+          return;
+        }
+        
+        // Create player with proper embed URL
+        player.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+        errorMessage.style.display = 'none';
+        
+        // Add to history
+        addToHistory(videoId, input);
+      }
+      
+      function extractVideoId(input) {
+        // Check if input is already a video ID
+        if (/^[a-zA-Z0-9_-]{11}$/.test(input)) {
+          return input;
+        }
+        
+        // Try to extract from URL
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+        const match = input.match(regExp);
+        
+        return (match && match[2].length === 11) ? match[2] : null;
+      }
+      
+      function showError() {
+        errorMessage.style.display = 'block';
+      }
+      
+      function addToHistory(videoId, originalInput) {
+        // Prevent duplicates
+        const existingIndex = watchHistory.findIndex(item => item.id === videoId);
+        if (existingIndex !== -1) {
+          watchHistory.splice(existingIndex, 1);
+        }
+        
+        // Add to beginning of array
+        watchHistory.unshift({
+          id: videoId,
+          input: originalInput,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Limit history to 10 items
+        if (watchHistory.length > 10) {
+          watchHistory = watchHistory.slice(0, 10);
+        }
+        
+        // Save to localStorage
+        localStorage.setItem('youtubeWatchHistory', JSON.stringify(watchHistory));
+        
+        // Update UI
+        renderHistory();
+      }
+      
+      function renderHistory() {
+        historyList.innerHTML = '';
+        
+        if (watchHistory.length === 0) {
+          historyList.innerHTML = '<p>No history yet. Watch videos to see them here.</p>';
+          return;
+        }
+        
+        watchHistory.forEach(item => {
+          const historyItem = document.createElement('div');
+          historyItem.className = 'history-item';
+          historyItem.textContent = item.input;
+          historyItem.addEventListener('click', function() {
+            videoUrlInput.value = item.input;
+            loadVideo();
+          });
+          
+          historyList.appendChild(historyItem);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
